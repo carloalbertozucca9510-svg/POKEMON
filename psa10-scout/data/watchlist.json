@@ -1,0 +1,17 @@
+[
+  {"name": "Charizard Holo Base Set 4/102",       "set": "Base Set",        "number": "4/102"},
+  {"name": "Blastoise Holo Base Set 2/102",        "set": "Base Set",        "number": "2/102"},
+  {"name": "Venusaur Holo Base Set 15/102",        "set": "Base Set",        "number": "15/102"},
+  {"name": "Mewtwo Holo Base Set 10/102",          "set": "Base Set",        "number": "10/102"},
+  {"name": "Pikachu Illustrator Promo",            "set": "Promo",           "number": "—"},
+  {"name": "Lugia Holo Neo Genesis 9/111",         "set": "Neo Genesis",     "number": "9/111"},
+  {"name": "Ho-Oh Holo Neo Revelation 10/64",      "set": "Neo Revelation",  "number": "10/64"},
+  {"name": "Gengar Holo Fossil 5/62",              "set": "Fossil",          "number": "5/62"},
+  {"name": "Umbreon VMAX Alt Art 215/193",         "set": "Paldea Evolved",  "number": "215/193"},
+  {"name": "Charizard ex SAR 199/165",             "set": "Pokemon 151",     "number": "199/165"},
+  {"name": "Iono SAR 269/193",                     "set": "Paldea Evolved",  "number": "269/193"},
+  {"name": "Charizard ex SAR 228/197",             "set": "Obsidian Flames", "number": "228/197"},
+  {"name": "Rayquaza VMAX Alt Art 218/202",        "set": "Evolving Skies",  "number": "218/202"},
+  {"name": "Umbreon V Alt Art 188/203",            "set": "Evolving Skies",  "number": "188/203"},
+  {"name": "Pikachu VMAX Rainbow 188/185",         "set": "Vivid Voltage",   "number": "188/185"}
+]

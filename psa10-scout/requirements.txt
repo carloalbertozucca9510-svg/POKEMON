@@ -1,0 +1,23 @@
+# HTTP & APIs
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Data handling
+pandas==2.1.4
+
+# Scheduling
+schedule==1.2.1
+
+# Telegram alerts
+python-telegram-bot==20.7
+
+# Web dashboard API
+flask==3.0.0
+flask-cors==4.0.0
+
+# Database
+# (uses Python built-in sqlite3)
+
+# Utilities
+rich==13.7.0         # pretty terminal output
+loguru==0.7.2        # structured logging
