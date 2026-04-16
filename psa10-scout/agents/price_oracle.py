@@ -11,7 +11,7 @@ from core.config import (
     EBAY_APP_ID, EBAY_FINDING_API_URL,
     FMV_LOOKBACK_DAYS, MIN_SOLD_COMPS
 )
-from core.database import upsert_fmv
+from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
 
 
@@ -81,6 +81,7 @@ def compute_fmv(comps: list[dict], lookback_days: int) -> float | None:
 
 def run_price_oracle():
     """Main entry point — update FMV for all watchlist cards."""
+    init_db()
     watchlist = load_watchlist()
     logger.info("Price Oracle running for {} cards", len(watchlist))
 

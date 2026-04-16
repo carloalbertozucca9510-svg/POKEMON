@@ -9,7 +9,7 @@ from core.config import EBAY_APP_ID, EBAY_FINDING_API_URL
 from core.models import Listing
 from data.watchlist import load_watchlist
 from agents.deal_ranker import score_and_save_deal
-from core.database import get_fmv
+from core.database import get_fmv, init_db
 
 
 def fetch_active_listings(card_name: str) -> list[Listing]:
@@ -67,6 +67,7 @@ def fetch_active_listings(card_name: str) -> list[Listing]:
 
 def run_listing_scout():
     """Main entry — scout every card on the watchlist."""
+    init_db()
     watchlist = load_watchlist()
     logger.info("Listing Scout scanning {} cards...", len(watchlist))
 
