@@ -1,90 +1,65 @@
 """
-Price Oracle — fetches PSA 10 listings from eBay and computes FMV.
+Price Oracle — fetches PSA 10 sold comps from eBay and computes FMV.
 
-Uses eBay's Browse API with OAuth client credentials to pull current listings,
-then computes 30-day and 90-day weighted average prices per card.
+Uses eBay's Finding API (findCompletedItems) to pull recent sold listings,
+then computes 30-day and 90-day weighted average sale prices per card.
 """
 import requests
 import time
 from datetime import datetime, timedelta
 from loguru import logger
 from core.config import (
-    EBAY_APP_ID, EBAY_CERT_ID,
+    EBAY_APP_ID,
     FMV_LOOKBACK_DAYS, MIN_SOLD_COMPS
 )
 from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
 
-_oauth_token: str | None = None
-_token_expiry: datetime | None = None
-
-
-def get_oauth_token() -> str:
-    """Get an OAuth app token, refreshing if expired."""
-    global _oauth_token, _token_expiry
-    if _oauth_token and _token_expiry and datetime.utcnow() < _token_expiry:
-        return _oauth_token
-
-    resp = requests.post(
-        "https://api.ebay.com/identity/v1/oauth2/token",
-        auth=(EBAY_APP_ID, EBAY_CERT_ID),
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
-            "grant_type": "client_credentials",
-            "scope": "https://api.ebay.com/oauth/api_scope",
-        },
-        timeout=15,
-    )
-    logger.debug("OAuth token status={} body={}", resp.status_code, resp.text[:500])
-    resp.raise_for_status()
-    token_data = resp.json()
-    _oauth_token = token_data["access_token"]
-    _token_expiry = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 7200) - 60)
-    logger.info("OAuth token acquired, expires in {}s", token_data.get("expires_in"))
-    return _oauth_token
-
 
 def fetch_sold_comps(card_name: str, days: int = 90) -> list[dict]:
     """
-    Query eBay Browse API for PSA 10 card listings.
+    Query eBay Finding API for completed/sold PSA 10 card listings.
     Returns list of {price, date} dicts.
     """
-    token = get_oauth_token()
-    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+    url = "https://svcs.ebay.com/services/search/FindingService/v1"
     params = {
-        "q": f"{card_name} PSA 10",
-        "category_ids": "2536",
-        "filter": "conditionIds:{3000},buyingOptions:{FIXED_PRICE}",
-        "sort": "price",
-        "limit": "50",
-    }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
+        "OPERATION-NAME": "findCompletedItems",
+        "SERVICE-VERSION": "1.0.0",
+        "SECURITY-APPNAME": EBAY_APP_ID,
+        "RESPONSE-DATA-FORMAT": "JSON",
+        "keywords": f"{card_name} PSA 10",
+        "categoryId": "2536",
+        "itemFilter(0).name": "SoldItemsOnly",
+        "itemFilter(0).value": "true",
+        "itemFilter(1).name": "Condition",
+        "itemFilter(1).value": "3000",
+        "sortOrder": "EndTimeSoonest",
+        "paginationInput.entriesPerPage": "50",
     }
 
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
-        logger.debug("eBay Browse API status={} body={}", resp.status_code, resp.text[:500])
+        resp = requests.get(url, params=params, timeout=15)
+        logger.info("eBay findCompletedItems for '{}' — status {}", card_name, resp.status_code)
         resp.raise_for_status()
         data = resp.json()
 
-        items = data.get("itemSummaries", [])
+        items = (
+            data.get("findCompletedItemsResponse", [{}])[0]
+               .get("searchResult", [{}])[0]
+               .get("item", [])
+        )
+
         cutoff = datetime.utcnow() - timedelta(days=days)
         comps = []
         for item in items:
-            price = float(item.get("price", {}).get("value", 0))
-            if price <= 0:
-                continue
-            date_str = item.get("itemCreationDate", "")
-            if date_str:
-                item_date = datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
-            else:
-                item_date = datetime.utcnow()
-            if item_date >= cutoff:
-                comps.append({"price": price, "date": item_date})
+            price = float(item["sellingStatus"][0]["currentPrice"][0]["__value__"])
+            end_time = datetime.strptime(
+                item["listingInfo"][0]["endTime"][0], "%Y-%m-%dT%H:%M:%S.%fZ"
+            )
+            if end_time >= cutoff:
+                comps.append({"price": price, "date": end_time})
 
-        logger.info("Fetched {} comps for '{}' ({}d)", len(comps), card_name, days)
+        logger.info("Found {} sold comps for '{}' in last {} days", len(comps), card_name, days)
         return comps
 
     except Exception as e:
@@ -124,12 +99,13 @@ def run_price_oracle():
         fmv_30d = compute_fmv(comps_30d, 30)
 
         if len(comps_90d) < MIN_SOLD_COMPS:
-            logger.warning("Insufficient comps for '{}' ({}), skipping FMV", name, len(comps_90d))
+            logger.warning("Insufficient comps for '{}' ({} found, need {}), skipping FMV", name, len(comps_90d), MIN_SOLD_COMPS)
+            time.sleep(5)
             continue
 
         upsert_fmv(key, name, fmv_30d, fmv_90d, len(comps_90d))
-        logger.info("FMV updated | {} | 30d: ${} | 90d: ${}", name, fmv_30d, fmv_90d)
-        time.sleep(2)
+        logger.info("FMV updated | {} | 30d: ${} | 90d: ${} | comps: {}", name, fmv_30d, fmv_90d, len(comps_90d))
+        time.sleep(5)
 
 
 if __name__ == "__main__":
