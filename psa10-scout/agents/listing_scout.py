@@ -14,6 +14,7 @@ from data.watchlist import load_watchlist
 from agents.deal_ranker import score_and_save_deal
 from core.database import get_fmv, init_db
 from data.search_builder import build_search_queries, deduplicate_listings
+from agents.card_verifier import batch_verify
 
 
 def get_oauth_token():
@@ -66,7 +67,7 @@ def compute_iqr_fences(prices: list[float]) -> tuple[float, float]:
 
 
 def fetch_active_listings(card: dict) -> list[dict]:
-    """Search eBay Browse API for active PSA 10 card listings using 20 queries."""
+    """Search eBay Browse API using short queries, then filter and verify."""
     token = get_oauth_token()
     queries = build_search_queries(card)
     logger.info("Searching '{}' with {} queries", card["name"], len(queries))
@@ -79,7 +80,7 @@ def fetch_active_listings(card: dict) -> list[dict]:
         params = {
             "q": query,
             "category_ids": "2536",
-            "filter": "conditionIds:{3000}",
+            "filter": "conditionIds:{3000|4000}",
             "sort": "price",
             "limit": "200",
         }
@@ -104,6 +105,7 @@ def fetch_active_listings(card: dict) -> list[dict]:
                 all_results.append({
                     "item_id": item.get("itemId", ""),
                     "title": item.get("title", ""),
+                    "price": price,
                     "listing": Listing(
                         item_id     = item.get("itemId", ""),
                         card_name   = card["name"],
@@ -123,11 +125,14 @@ def fetch_active_listings(card: dict) -> list[dict]:
     deduped = deduplicate_listings(all_results)
 
     validated = [r for r in deduped if is_valid_japanese_psa10(r["title"])]
-    removed = len(deduped) - len(validated)
-    logger.info("Title validation: {} passed, {} removed", len(validated), removed)
-    logger.info("'{}' pipeline: raw={}, dedup={}, validated={}",
-                card["name"], raw_total, len(deduped), len(validated))
-    return validated
+    title_removed = len(deduped) - len(validated)
+    logger.info("Title validation: {} passed, {} removed", len(validated), title_removed)
+
+    verified = batch_verify(validated)
+    logger.info("After AI verification: {}/{} listings confirmed", len(verified), len(validated))
+    logger.info("'{}' pipeline: raw={}, dedup={}, title_validated={}, ai_verified={}",
+                card["name"], raw_total, len(deduped), len(validated), len(verified))
+    return verified
 
 
 def run_listing_scout():
@@ -154,6 +159,7 @@ def run_listing_scout():
         for r in results:
             listing = r["listing"]
             title = r["title"]
+            confidence = r.get("verify_confidence", 0)
 
             if not (lower_fence <= listing.ask_price <= upper_fence):
                 logger.debug("Skipping outlier: ${:.2f} — {}", listing.ask_price, title[:80])
@@ -161,8 +167,8 @@ def run_listing_scout():
 
             if score_and_save_deal(listing, fmv_row):
                 discount_pct = ((fmv_value - listing.ask_price) / fmv_value) * 100 if fmv_value else 0
-                logger.info("DEAL FOUND | title: {} | ask: ${:.2f} | FMV: ${:.2f} | discount: {:.1f}%",
-                            title[:100], listing.ask_price, fmv_value, discount_pct)
+                logger.info("DEAL FOUND | title: {} | ask: ${:.2f} | FMV: ${:.2f} | discount: {:.1f}% | confidence: {}%",
+                            title[:100], listing.ask_price, fmv_value, discount_pct, confidence)
                 deals_found += 1
         time.sleep(5)
 

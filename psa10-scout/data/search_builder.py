@@ -12,59 +12,45 @@ from loguru import logger
 
 def build_search_queries(card: dict) -> list[str]:
     """
-    Generates 20 targeted search queries for maximum coverage.
-    Fixed prefix: "PSA 10"
+    Generates 20 SHORT focused queries (3-4 words max) to maximize
+    eBay result count. Filtering happens on our side after results come back.
     Returns deduplicated list of query strings.
     """
-    name_variants = card.get("name_variants", [card["name"]])
-    set_variants = card.get("set_variants", [])
-    number_variants = card.get("number_variants", [])
-    keyword_variants = card.get("keyword_variants", [])
-    language_variants = card.get("language_variants", [])
-
-    n = lambda i: name_variants[i] if i < len(name_variants) else ""
-    s = lambda i: set_variants[i] if i < len(set_variants) else ""
-    num = lambda i: number_variants[i] if i < len(number_variants) else ""
-    k = lambda i: keyword_variants[i] if i < len(keyword_variants) else ""
-    lang = lambda i: language_variants[i] if i < len(language_variants) else ""
-
-    fixed = "PSA 10"
-
     raw_queries = [
-        # Group A — name + language + number (most specific)
-        f"{fixed} {n(0)} {lang(0)} {num(0)}",
-        f"{fixed} {n(0)} {lang(0)} {num(1)}",
-        f"{fixed} {n(1)} {lang(0)} {num(0)}",
-        f"{fixed} {n(0)} {lang(2)} {num(0)}",
-        f"{fixed} {n(0)} {lang(3)} {num(1)}",
+        # Group A — shortest most effective (2-3 words)
+        "Charizard ex japanese PSA 10",
+        "Charizard ex SV2a PSA 10",
+        "Charizard ex 201 PSA 10",
+        "リザードン SV2a PSA 10",
+        "リザードン 201 PSA 10",
 
-        # Group B — name + language + keyword
-        f"{fixed} {n(0)} {lang(0)} {k(1)}",
-        f"{fixed} {n(0)} {lang(0)} {k(0)}",
-        f"{fixed} {n(0)} {lang(0)} {k(2)}",
-        f"{fixed} {n(1)} {lang(1)} {k(1)}",
-        f"{fixed} {n(0)} {lang(2)} {k(4)}",
+        # Group B — slightly more specific (3-4 words)
+        "Charizard ex 151 PSA 10",
+        "Charizard SAR japanese PSA 10",
+        "Charizard SV2a SAR PSA 10",
+        "Charizard ex SAR japanese",
+        "Charizard 201 japanese PSA",
 
-        # Group C — name + language + set
-        f"{fixed} {n(0)} {lang(0)} {s(0)}",
-        f"{fixed} {n(0)} {lang(0)} {s(1)}",
-        f"{fixed} {n(0)} {lang(1)} {s(2)}",
-        f"{fixed} {n(1)} {lang(0)} {s(1)}",
-        f"{fixed} {n(0)} {lang(2)} {s(0)}",
+        # Group C — keyword variations
+        "Charizard Special Art japanese PSA",
+        "Charizard SIR japanese PSA 10",
+        "Charizard Special Illustration SV2a",
+        "Charizard ex 201 SV2a",
+        "リザードン SAR PSA 10",
 
-        # Group D — broader fallback searches
-        f"{fixed} {n(0)} {lang(0)}",
-        f"{fixed} {n(3)} {lang(0)} {num(1)}",
-        f"{fixed} {n(3)} {s(1)} {k(1)}",
-        f"{fixed} {n(0)} {s(1)} {k(1)} PSA",
-        f"{fixed} {n(2)} {num(1)} {lang(0)} graded",
+        # Group D — broader fallbacks
+        "Charizard ex japanese graded",
+        "Charizard 151 SAR PSA",
+        "Charizard SV2a japanese graded",
+        "Charizard ex 2023 japanese PSA",
+        "リザードン Special Art PSA",
     ]
 
     # Deduplicate while preserving order
     seen = set()
     unique = []
     for q in raw_queries:
-        q = " ".join(q.split())  # normalize whitespace
+        q = " ".join(q.split())
         if q and q not in seen:
             seen.add(q)
             unique.append(q)

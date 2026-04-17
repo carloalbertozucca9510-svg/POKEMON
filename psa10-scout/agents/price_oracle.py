@@ -2,7 +2,7 @@
 Price Oracle — estimates FMV for PSA 10 cards using eBay Browse API.
 
 Uses IQR-filtered median of active asking prices as an FMV proxy,
-with title validation to ensure only genuine listings are counted.
+with title validation and Claude AI verification for accuracy.
 """
 import requests
 import time
@@ -18,6 +18,7 @@ from core.config import (
 from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
 from data.search_builder import build_search_queries, deduplicate_listings
+from agents.card_verifier import batch_verify
 
 
 def get_oauth_token():
@@ -61,8 +62,9 @@ def is_valid_japanese_psa10(title: str) -> bool:
 
 def fetch_active_prices(card: dict) -> list[float]:
     """
-    Query eBay Browse API for active PSA 10 listings using 20 search queries.
-    Returns deduplicated, title-validated list of asking prices sorted ascending.
+    Query eBay Browse API using short queries, then filter with
+    title validation and Claude AI verification.
+    Returns deduplicated, verified list of asking prices sorted ascending.
     """
     token = get_oauth_token()
     queries = build_search_queries(card)
@@ -76,7 +78,7 @@ def fetch_active_prices(card: dict) -> list[float]:
         params = {
             "q": query,
             "category_ids": "2536",
-            "filter": "buyingOptions:{FIXED_PRICE},conditionIds:{3000}",
+            "filter": "conditionIds:{3000|4000}",
             "sort": "price",
             "limit": "200",
         }
@@ -108,12 +110,15 @@ def fetch_active_prices(card: dict) -> list[float]:
     deduped = deduplicate_listings(all_results)
 
     validated = [r for r in deduped if is_valid_japanese_psa10(r["title"])]
-    removed = len(deduped) - len(validated)
-    logger.info("Title validation: {} passed, {} removed", len(validated), removed)
+    title_removed = len(deduped) - len(validated)
+    logger.info("Title validation: {} passed, {} removed", len(validated), title_removed)
 
-    prices = sorted(r["price"] for r in validated)
-    logger.info("'{}' pipeline: raw={}, dedup={}, validated={}, final={}",
-                card["name"], raw_total, len(deduped), len(validated), len(prices))
+    verified = batch_verify(validated)
+    logger.info("After AI verification: {}/{} listings confirmed", len(verified), len(validated))
+
+    prices = sorted(r["price"] for r in verified)
+    logger.info("'{}' pipeline: raw={}, dedup={}, title_validated={}, ai_verified={}, final={}",
+                card["name"], raw_total, len(deduped), len(validated), len(verified), len(prices))
     return prices
 
 
@@ -174,8 +179,7 @@ def run_price_oracle():
             continue
 
         upsert_fmv(key, name, fmv, fmv, len(prices))
-        logger.info("FMV | {} | ${} (IQR median) | raw: {} | validated: {} | after IQR: computed",
-                    name, fmv, len(prices), len(prices))
+        logger.info("FMV | {} | ${} (IQR median) | verified listings: {}", name, fmv, len(prices))
         time.sleep(5)
 
 
