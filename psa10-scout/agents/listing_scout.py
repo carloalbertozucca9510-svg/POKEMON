@@ -14,11 +14,13 @@ from core.database import get_fmv, init_db
 
 def fetch_active_listings(card_name: str) -> list[Listing]:
     """Search eBay active BIN and auction listings for a PSA 10 card."""
+    headers = {
+        "X-EBAY-SOA-SECURITY-APPNAME":        EBAY_APP_ID,
+        "X-EBAY-SOA-OPERATION-NAME":          "findItemsAdvanced",
+        "X-EBAY-SOA-SERVICE-VERSION":         "1.0.0",
+        "X-EBAY-SOA-RESPONSE-DATA-FORMAT":    "JSON",
+    }
     params = {
-        "OPERATION-NAME":                 "findItemsAdvanced",
-        "SERVICE-VERSION":                "1.0.0",
-        "SECURITY-APPNAME":               EBAY_APP_ID,
-        "RESPONSE-DATA-FORMAT":           "JSON",
         "keywords":                       f"{card_name} PSA 10",
         "categoryId":                     "2536",
         "itemFilter(0).name":             "Condition",
@@ -28,7 +30,7 @@ def fetch_active_listings(card_name: str) -> list[Listing]:
     }
 
     try:
-        resp = requests.get(EBAY_FINDING_API_URL, params=params, timeout=10)
+        resp = requests.get(EBAY_FINDING_API_URL, headers=headers, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
 
