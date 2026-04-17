@@ -7,6 +7,7 @@ since findCompletedItems is restricted for our account type.
 import requests
 import time
 import statistics
+import base64
 from datetime import datetime, timedelta
 from loguru import logger
 from core.config import (
@@ -16,32 +17,28 @@ from core.config import (
 from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
 
-_oauth_token: str | None = None
-_token_expiry: datetime | None = None
+def get_oauth_token():
+    credentials = f"{EBAY_APP_ID}:{EBAY_CERT_ID}"
+    encoded = base64.b64encode(credentials.encode()).decode()
 
+    headers = {
+        "Authorization": f"Basic {encoded}",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
 
-def get_oauth_token() -> str:
-    """Get an OAuth app token, refreshing if expired."""
-    global _oauth_token, _token_expiry
-    if _oauth_token and _token_expiry and datetime.utcnow() < _token_expiry:
-        return _oauth_token
+    data = "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope"
 
     resp = requests.post(
         "https://api.ebay.com/identity/v1/oauth2/token",
-        auth=(EBAY_APP_ID, EBAY_CERT_ID),
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
-            "grant_type": "client_credentials",
-            "scope": "https://api.ebay.com/oauth/api_scope",
-        },
+        headers=headers,
+        data=data,
         timeout=15,
     )
+
+    logger.debug("OAuth token status={} body={}", resp.status_code, resp.text[:300])
     resp.raise_for_status()
     token_data = resp.json()
-    _oauth_token = token_data["access_token"]
-    _token_expiry = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 7200) - 60)
-    logger.info("OAuth token acquired, expires in {}s", token_data.get("expires_in"))
-    return _oauth_token
+    return token_data["access_token"]
 
 
 def fetch_active_prices(card_name: str) -> list[float]:
