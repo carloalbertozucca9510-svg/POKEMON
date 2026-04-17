@@ -49,7 +49,7 @@ def fetch_active_prices(card_name: str) -> list[float]:
     token = get_oauth_token()
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
     params = {
-        "q": f"{card_name} PSA 10",
+        "q": f"{card_name} PSA 10 graded",
         "category_ids": "2536",
         "filter": "buyingOptions:{FIXED_PRICE},conditionIds:{3000}",
         "sort": "price",
@@ -70,7 +70,7 @@ def fetch_active_prices(card_name: str) -> list[float]:
         prices = []
         for item in items:
             price = float(item.get("price", {}).get("value", 0))
-            if price > 0:
+            if price >= 50:
                 prices.append(price)
 
         prices.sort()
