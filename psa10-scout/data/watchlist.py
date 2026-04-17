@@ -21,4 +21,9 @@ def load_watchlist() -> list[dict]:
     for card in cards:
         if "key" not in card:
             card["key"] = normalise_key(card["name"])
+        card.setdefault("language", ["english"])
+        card.setdefault("name_variants", [card["name"]])
+        card.setdefault("set_variants", [])
+        card.setdefault("number_variants", [])
+        card.setdefault("keyword_variants", [])
     return cards

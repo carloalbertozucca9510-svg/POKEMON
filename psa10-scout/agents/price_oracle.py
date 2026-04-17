@@ -16,6 +16,7 @@ from core.config import (
 )
 from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
+from data.search_builder import build_search_queries, deduplicate_listings
 
 def get_oauth_token():
     credentials = f"{EBAY_APP_ID}:{EBAY_CERT_ID}"
@@ -41,45 +42,56 @@ def get_oauth_token():
     return token_data["access_token"]
 
 
-def fetch_active_prices(card_name: str) -> list[float]:
+def fetch_active_prices(card: dict) -> list[float]:
     """
-    Query eBay Browse API for active PSA 10 listings.
-    Returns list of asking prices sorted ascending.
+    Query eBay Browse API for active PSA 10 listings using multiple search queries.
+    Returns deduplicated list of asking prices sorted ascending.
     """
     token = get_oauth_token()
+    queries = build_search_queries(card)
+    logger.info("Searching '{}' with {} queries: {}", card["name"], len(queries), queries)
+
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
-    params = {
-        "q": f"{card_name} PSA 10 graded",
-        "category_ids": "2536",
-        "filter": "buyingOptions:{FIXED_PRICE},conditionIds:{3000}",
-        "sort": "price",
-        "limit": "50",
-    }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+    all_results = []
+    raw_total = 0
 
-    try:
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
-        logger.info("Browse API for '{}' — status {}", card_name, resp.status_code)
-        resp.raise_for_status()
-        data = resp.json()
+    for query in queries:
+        params = {
+            "q": query,
+            "category_ids": "2536",
+            "filter": "buyingOptions:{FIXED_PRICE},conditionIds:{3000}",
+            "sort": "price",
+            "limit": "50",
+        }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
-        items = data.get("itemSummaries", [])
-        prices = []
-        for item in items:
-            price = float(item.get("price", {}).get("value", 0))
-            if price >= 50:
-                prices.append(price)
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            logger.debug("Browse API query='{}' — status {}", query, resp.status_code)
+            resp.raise_for_status()
+            data = resp.json()
 
-        prices.sort()
-        logger.info("Found {} active PSA 10 listings for '{}'", len(prices), card_name)
-        return prices
+            items = data.get("itemSummaries", [])
+            raw_total += len(items)
+            for item in items:
+                price = float(item.get("price", {}).get("value", 0))
+                if price >= 50:
+                    all_results.append({
+                        "item_id": item.get("itemId", ""),
+                        "price": price,
+                    })
 
-    except Exception as e:
-        logger.error("Error fetching listings for '{}': {}", card_name, e)
-        return []
+        except Exception as e:
+            logger.error("Error on query '{}': {}", query, e)
+
+    deduped = deduplicate_listings(all_results)
+    prices = sorted(r["price"] for r in deduped)
+    logger.info("'{}' — raw results: {}, after dedup: {}, after $50 filter: {}",
+                card["name"], raw_total, len(deduped), len(prices))
+    return prices
 
 
 def compute_median_fmv(prices: list[float], sample_size: int = 5) -> float | None:
@@ -100,7 +112,7 @@ def run_price_oracle():
         name = card["name"]
         key  = card["key"]
 
-        prices = fetch_active_prices(name)
+        prices = fetch_active_prices(card)
 
         if len(prices) < MIN_SOLD_COMPS:
             logger.warning("Insufficient data for '{}' ({} listings found, need {}), skipping", name, len(prices), MIN_SOLD_COMPS)

@@ -12,6 +12,7 @@ from core.models import Listing
 from data.watchlist import load_watchlist
 from agents.deal_ranker import score_and_save_deal
 from core.database import get_fmv, init_db
+from data.search_builder import build_search_queries, deduplicate_listings
 
 
 def get_oauth_token():
@@ -38,53 +39,64 @@ def get_oauth_token():
     return token_data["access_token"]
 
 
-def fetch_active_listings(card_name: str) -> list[Listing]:
-    """Search eBay Browse API for active PSA 10 card listings."""
+def fetch_active_listings(card: dict) -> list[Listing]:
+    """Search eBay Browse API for active PSA 10 card listings using multiple queries."""
     token = get_oauth_token()
+    queries = build_search_queries(card)
+    logger.info("Searching '{}' with {} queries: {}", card["name"], len(queries), queries)
+
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
-    params = {
-        "q": f"{card_name} PSA 10",
-        "category_ids": "2536",
-        "filter": "conditionIds:{3000}",
-        "sort": "price",
-        "limit": "25",
-    }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+    all_results = []
+    raw_total = 0
 
-    try:
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
-        logger.info("Browse API for '{}' — status {}", card_name, resp.status_code)
-        resp.raise_for_status()
-        data = resp.json()
+    for query in queries:
+        params = {
+            "q": query,
+            "category_ids": "2536",
+            "filter": "conditionIds:{3000}",
+            "sort": "price",
+            "limit": "25",
+        }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
-        items = data.get("itemSummaries", [])
-        listings = []
-        for item in items:
-            price = float(item.get("price", {}).get("value", 0))
-            if price <= 0:
-                continue
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            logger.debug("Browse API query='{}' — status {}", query, resp.status_code)
+            resp.raise_for_status()
+            data = resp.json()
 
-            listings.append(Listing(
-                item_id     = item.get("itemId", ""),
-                card_name   = card_name,
-                psa_grade   = 10,
-                ask_price   = price,
-                listing_url = item.get("itemWebUrl", ""),
-                source      = "ebay",
-                listed_at   = datetime.utcnow(),
-                image_url   = item.get("image", {}).get("imageUrl", ""),
-                seller      = item.get("seller", {}).get("username", ""),
-            ))
+            items = data.get("itemSummaries", [])
+            raw_total += len(items)
+            for item in items:
+                price = float(item.get("price", {}).get("value", 0))
+                if price <= 0:
+                    continue
 
-        logger.info("Found {} listings for '{}'", len(listings), card_name)
-        return listings
+                all_results.append({
+                    "item_id": item.get("itemId", ""),
+                    "listing": Listing(
+                        item_id     = item.get("itemId", ""),
+                        card_name   = card["name"],
+                        psa_grade   = 10,
+                        ask_price   = price,
+                        listing_url = item.get("itemWebUrl", ""),
+                        source      = "ebay",
+                        listed_at   = datetime.utcnow(),
+                        image_url   = item.get("image", {}).get("imageUrl", ""),
+                        seller      = item.get("seller", {}).get("username", ""),
+                    ),
+                })
 
-    except Exception as e:
-        logger.error("Error fetching listings for '{}': {}", card_name, e)
-        return []
+        except Exception as e:
+            logger.error("Error on query '{}': {}", query, e)
+
+    deduped = deduplicate_listings(all_results)
+    listings = [r["listing"] for r in deduped]
+    logger.info("'{}' — raw results: {}, after dedup: {}", card["name"], raw_total, len(listings))
+    return listings
 
 
 def run_listing_scout():
@@ -100,11 +112,11 @@ def run_listing_scout():
             logger.warning("No FMV for '{}', skipping", card["name"])
             continue
 
-        listings = fetch_active_listings(card["name"])
+        listings = fetch_active_listings(card)
         for listing in listings:
             if score_and_save_deal(listing, fmv_row):
                 deals_found += 1
-        time.sleep(2)
+        time.sleep(5)
 
     logger.info("Scout complete — {} new deals saved", deals_found)
 
