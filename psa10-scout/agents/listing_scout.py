@@ -3,6 +3,7 @@ Listing Scout — scans eBay active listings for PSA 10 cards on the watchlist.
 Passes each listing to the Deal Ranker for scoring.
 """
 import requests
+import time
 from datetime import datetime
 from loguru import logger
 from core.config import EBAY_APP_ID, EBAY_FINDING_API_URL
@@ -87,6 +88,7 @@ def run_listing_scout():
         for listing in listings:
             if score_and_save_deal(listing, fmv_row):
                 deals_found += 1
+        time.sleep(2)
 
     logger.info("Scout complete — {} new deals saved", deals_found)
 

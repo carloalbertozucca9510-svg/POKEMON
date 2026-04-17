@@ -5,6 +5,7 @@ Uses eBay's Finding API (completedItems=true) to pull recent sales,
 then computes 30-day and 90-day weighted average sale prices per card.
 """
 import requests
+import time
 from datetime import datetime, timedelta
 from loguru import logger
 from core.config import (
@@ -106,6 +107,7 @@ def run_price_oracle():
 
         upsert_fmv(key, name, fmv_30d, fmv_90d, len(comps_90d))
         logger.info("FMV updated | {} | 30d: ${} | 90d: ${}", name, fmv_30d, fmv_90d)
+        time.sleep(2)
 
 
 if __name__ == "__main__":
