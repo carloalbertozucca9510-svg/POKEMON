@@ -1,13 +1,14 @@
 """
 Price Oracle — estimates FMV for PSA 10 cards using eBay Browse API.
 
-Uses the median of the lowest active asking prices as an FMV proxy,
+Uses IQR-filtered median of active asking prices as an FMV proxy,
 since findCompletedItems is restricted for our account type.
 """
 import requests
 import time
 import statistics
 import base64
+import numpy as np
 from datetime import datetime, timedelta
 from loguru import logger
 from core.config import (
@@ -61,7 +62,7 @@ def fetch_active_prices(card: dict) -> list[float]:
             "category_ids": "2536",
             "filter": "buyingOptions:{FIXED_PRICE},conditionIds:{3000}",
             "sort": "price",
-            "limit": "50",
+            "limit": "200",
         }
         headers = {
             "Authorization": f"Bearer {token}",
@@ -78,7 +79,7 @@ def fetch_active_prices(card: dict) -> list[float]:
             raw_total += len(items)
             for item in items:
                 price = float(item.get("price", {}).get("value", 0))
-                if price >= 50:
+                if price > 0:
                     all_results.append({
                         "item_id": item.get("itemId", ""),
                         "price": price,
@@ -89,17 +90,33 @@ def fetch_active_prices(card: dict) -> list[float]:
 
     deduped = deduplicate_listings(all_results)
     prices = sorted(r["price"] for r in deduped)
-    logger.info("'{}' — raw results: {}, after dedup: {}, after $50 filter: {}",
-                card["name"], raw_total, len(deduped), len(prices))
+    logger.info("'{}' — raw results: {}, after dedup: {}", card["name"], raw_total, len(deduped))
     return prices
 
 
-def compute_median_fmv(prices: list[float], sample_size: int = 5) -> float | None:
-    """Take the median of the lowest N asking prices as an FMV proxy."""
-    if not prices:
-        return None
-    lowest = prices[:sample_size]
-    return round(statistics.median(lowest), 2)
+def compute_iqr_fmv(prices: list[float]) -> tuple[float | None, float, float]:
+    """
+    Use IQR method to remove outliers, then return median of cleaned prices.
+    Returns (fmv, lower_fence, upper_fence).
+    """
+    if len(prices) < 3:
+        return None, 0.0, 0.0
+
+    q1 = float(np.percentile(prices, 25))
+    q3 = float(np.percentile(prices, 75))
+    iqr = q3 - q1
+    lower_fence = q1 - (1.5 * iqr)
+    upper_fence = q3 + (1.5 * iqr)
+    cleaned = [p for p in prices if lower_fence <= p <= upper_fence]
+
+    logger.info("IQR stats — Q1: ${:.2f}, Q3: ${:.2f}, IQR: ${:.2f}, fences: [${:.2f}, ${:.2f}], cleaned: {}/{}",
+                q1, q3, iqr, lower_fence, upper_fence, len(cleaned), len(prices))
+
+    if len(cleaned) < 3:
+        return None, lower_fence, upper_fence
+
+    fmv = round(statistics.median(cleaned), 2)
+    return fmv, lower_fence, upper_fence
 
 
 def run_price_oracle():
@@ -119,9 +136,15 @@ def run_price_oracle():
             time.sleep(5)
             continue
 
-        fmv = compute_median_fmv(prices)
+        fmv, lower_fence, upper_fence = compute_iqr_fmv(prices)
+
+        if fmv is None:
+            logger.warning("Could not compute FMV for '{}' — too few prices after IQR filtering", name)
+            time.sleep(5)
+            continue
+
         upsert_fmv(key, name, fmv, fmv, len(prices))
-        logger.info("FMV proxy | {} | median of lowest 5: ${} | total listings: {}", name, fmv, len(prices))
+        logger.info("FMV | {} | ${} (IQR median) | total listings: {}", name, fmv, len(prices))
         time.sleep(5)
 
 

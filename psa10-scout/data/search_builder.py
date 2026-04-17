@@ -1,3 +1,9 @@
+# API CALL BUDGET
+# 15 cards × 6 queries × 1 call each = 90 calls per run
+# 12 runs per day (every 2 hours) = 1,080 calls/day
+# eBay Browse API limit = 5,000 calls/day
+# Usage = 21.6% of daily limit — safe margin
+
 from itertools import product
 
 FIXED_TERMS = ["pokemon", "PSA 10"]
@@ -14,7 +20,7 @@ def build_search_queries(card: dict) -> list[str]:
     to generate targeted queries.
 
     Returns a deduplicated list of query strings,
-    max 4 queries per card to stay within API limits.
+    max 6 queries per card to stay within API limits.
     """
     queries = []
     name_variants = card.get("name_variants", [card["name"]])
@@ -42,6 +48,15 @@ def build_search_queries(card: dict) -> list[str]:
         for name in name_variants[:1]:
             queries.append(f"{fixed} {name} japanese".strip())
 
+    # Query type 5: name + second number variant (shorter form)
+    if len(number_variants) > 1:
+        for name in name_variants[:1]:
+            queries.append(f"{fixed} {name} {number_variants[1]}".strip())
+
+    # Query type 6: second name variant + first keyword
+    if len(name_variants) > 1 and keyword_variants:
+        queries.append(f"{fixed} {name_variants[1]} {keyword_variants[0]}".strip())
+
     # Deduplicate while preserving order
     seen = set()
     unique = []
@@ -50,7 +65,7 @@ def build_search_queries(card: dict) -> list[str]:
             seen.add(q)
             unique.append(q)
 
-    return unique[:4]  # max 4 queries per card
+    return unique[:6]  # max 6 queries per card
 
 
 def deduplicate_listings(listings: list) -> list:

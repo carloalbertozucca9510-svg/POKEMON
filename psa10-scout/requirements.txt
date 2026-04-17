@@ -4,6 +4,7 @@ python-dotenv==1.0.0
 
 # Data handling
 pandas==2.1.4
+numpy==1.26.3
 
 # Scheduling
 schedule==1.2.1

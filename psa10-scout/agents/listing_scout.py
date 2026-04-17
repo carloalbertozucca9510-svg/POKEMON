@@ -5,6 +5,7 @@ Passes each listing to the Deal Ranker for scoring.
 import requests
 import time
 import base64
+import numpy as np
 from datetime import datetime
 from loguru import logger
 from core.config import EBAY_APP_ID, EBAY_CERT_ID
@@ -39,6 +40,16 @@ def get_oauth_token():
     return token_data["access_token"]
 
 
+def compute_iqr_fences(prices: list[float]) -> tuple[float, float]:
+    """Compute IQR fences for outlier detection."""
+    if len(prices) < 3:
+        return 0.0, float("inf")
+    q1 = float(np.percentile(prices, 25))
+    q3 = float(np.percentile(prices, 75))
+    iqr = q3 - q1
+    return q1 - (1.5 * iqr), q3 + (1.5 * iqr)
+
+
 def fetch_active_listings(card: dict) -> list[Listing]:
     """Search eBay Browse API for active PSA 10 card listings using multiple queries."""
     token = get_oauth_token()
@@ -55,7 +66,7 @@ def fetch_active_listings(card: dict) -> list[Listing]:
             "category_ids": "2536",
             "filter": "conditionIds:{3000}",
             "sort": "price",
-            "limit": "25",
+            "limit": "200",
         }
         headers = {
             "Authorization": f"Bearer {token}",
@@ -113,7 +124,15 @@ def run_listing_scout():
             continue
 
         listings = fetch_active_listings(card)
+
+        all_prices = [l.ask_price for l in listings]
+        lower_fence, upper_fence = compute_iqr_fences(all_prices)
+        logger.info("'{}' IQR fences: [${:.2f}, ${:.2f}]", card["name"], lower_fence, upper_fence)
+
         for listing in listings:
+            if not (lower_fence <= listing.ask_price <= upper_fence):
+                logger.debug("Skipping outlier listing {} at ${:.2f}", listing.item_id, listing.ask_price)
+                continue
             if score_and_save_deal(listing, fmv_row):
                 deals_found += 1
         time.sleep(5)
