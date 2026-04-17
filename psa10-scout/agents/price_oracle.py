@@ -20,25 +20,28 @@ def fetch_sold_comps(card_name: str, days: int = 90) -> list[dict]:
     Query eBay completed listings for a PSA 10 card.
     Returns list of {price, date} dicts.
     """
-    headers = {
-        "X-EBAY-SOA-SECURITY-APPNAME":        EBAY_APP_ID,
-        "X-EBAY-SOA-OPERATION-NAME":          "findCompletedItems",
-        "X-EBAY-SOA-SERVICE-VERSION":         "1.0.0",
-        "X-EBAY-SOA-RESPONSE-DATA-FORMAT":    "JSON",
-    }
+    url = "https://svcs.ebay.com/services/search/FindingService/v1"
     params = {
+        "OPERATION-NAME":                 "findCompletedItems",
+        "SERVICE-VERSION":                "1.0.0",
+        "SECURITY-APPNAME":               EBAY_APP_ID,
+        "RESPONSE-DATA-FORMAT":           "JSON",
         "keywords":                       f"{card_name} PSA 10",
-        "categoryId":                     "2536",   # Trading Card Singles
+        "categoryId":                     "2536",
         "itemFilter(0).name":             "SoldItemsOnly",
         "itemFilter(0).value":            "true",
         "itemFilter(1).name":             "Condition",
-        "itemFilter(1).value":            "3000",   # Graded
+        "itemFilter(1).value":            "3000",
         "sortOrder":                      "EndTimeSoonest",
         "paginationInput.entriesPerPage": "50",
     }
+    headers = {
+        "Content-Type": "application/json",
+    }
 
     try:
-        resp = requests.get(EBAY_FINDING_API_URL, headers=headers, params=params, timeout=10)
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        logger.debug("eBay findCompletedItems status={} body={}", resp.status_code, resp.text[:500])
         resp.raise_for_status()
         data = resp.json()
 
