@@ -40,6 +40,21 @@ def get_oauth_token():
     return token_data["access_token"]
 
 
+def is_valid_japanese_psa10(title: str) -> bool:
+    title_lower = title.lower()
+
+    has_psa = "psa" in title_lower
+
+    jp_keywords = ["japanese", "japan", " jp ",
+                   "jpn", "日本", "sv2a", "リザードン"]
+    has_japanese = any(kw in title_lower for kw in jp_keywords)
+
+    card_keywords = ["charizard", "リザードン", "lizardon"]
+    has_card = any(kw in title_lower for kw in card_keywords)
+
+    return has_psa and has_japanese and has_card
+
+
 def compute_iqr_fences(prices: list[float]) -> tuple[float, float]:
     """Compute IQR fences for outlier detection."""
     if len(prices) < 3:
@@ -50,11 +65,11 @@ def compute_iqr_fences(prices: list[float]) -> tuple[float, float]:
     return q1 - (1.5 * iqr), q3 + (1.5 * iqr)
 
 
-def fetch_active_listings(card: dict) -> list[Listing]:
-    """Search eBay Browse API for active PSA 10 card listings using multiple queries."""
+def fetch_active_listings(card: dict) -> list[dict]:
+    """Search eBay Browse API for active PSA 10 card listings using 20 queries."""
     token = get_oauth_token()
     queries = build_search_queries(card)
-    logger.info("Searching '{}' with {} queries: {}", card["name"], len(queries), queries)
+    logger.info("Searching '{}' with {} queries", card["name"], len(queries))
 
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
     all_results = []
@@ -88,6 +103,7 @@ def fetch_active_listings(card: dict) -> list[Listing]:
 
                 all_results.append({
                     "item_id": item.get("itemId", ""),
+                    "title": item.get("title", ""),
                     "listing": Listing(
                         item_id     = item.get("itemId", ""),
                         card_name   = card["name"],
@@ -105,9 +121,13 @@ def fetch_active_listings(card: dict) -> list[Listing]:
             logger.error("Error on query '{}': {}", query, e)
 
     deduped = deduplicate_listings(all_results)
-    listings = [r["listing"] for r in deduped]
-    logger.info("'{}' — raw results: {}, after dedup: {}", card["name"], raw_total, len(listings))
-    return listings
+
+    validated = [r for r in deduped if is_valid_japanese_psa10(r["title"])]
+    removed = len(deduped) - len(validated)
+    logger.info("Title validation: {} passed, {} removed", len(validated), removed)
+    logger.info("'{}' pipeline: raw={}, dedup={}, validated={}",
+                card["name"], raw_total, len(deduped), len(validated))
+    return validated
 
 
 def run_listing_scout():
@@ -123,17 +143,26 @@ def run_listing_scout():
             logger.warning("No FMV for '{}', skipping", card["name"])
             continue
 
-        listings = fetch_active_listings(card)
+        results = fetch_active_listings(card)
+        listings = [r["listing"] for r in results]
 
         all_prices = [l.ask_price for l in listings]
         lower_fence, upper_fence = compute_iqr_fences(all_prices)
         logger.info("'{}' IQR fences: [${:.2f}, ${:.2f}]", card["name"], lower_fence, upper_fence)
 
-        for listing in listings:
+        fmv_value = fmv_row["fmv_90d"]
+        for r in results:
+            listing = r["listing"]
+            title = r["title"]
+
             if not (lower_fence <= listing.ask_price <= upper_fence):
-                logger.debug("Skipping outlier listing {} at ${:.2f}", listing.item_id, listing.ask_price)
+                logger.debug("Skipping outlier: ${:.2f} — {}", listing.ask_price, title[:80])
                 continue
+
             if score_and_save_deal(listing, fmv_row):
+                discount_pct = ((fmv_value - listing.ask_price) / fmv_value) * 100 if fmv_value else 0
+                logger.info("DEAL FOUND | title: {} | ask: ${:.2f} | FMV: ${:.2f} | discount: {:.1f}%",
+                            title[:100], listing.ask_price, fmv_value, discount_pct)
                 deals_found += 1
         time.sleep(5)
 

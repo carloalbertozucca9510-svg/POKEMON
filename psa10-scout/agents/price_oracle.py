@@ -2,7 +2,7 @@
 Price Oracle — estimates FMV for PSA 10 cards using eBay Browse API.
 
 Uses IQR-filtered median of active asking prices as an FMV proxy,
-since findCompletedItems is restricted for our account type.
+with title validation to ensure only genuine listings are counted.
 """
 import requests
 import time
@@ -18,6 +18,7 @@ from core.config import (
 from core.database import upsert_fmv, init_db
 from data.watchlist import load_watchlist
 from data.search_builder import build_search_queries, deduplicate_listings
+
 
 def get_oauth_token():
     credentials = f"{EBAY_APP_ID}:{EBAY_CERT_ID}"
@@ -43,14 +44,29 @@ def get_oauth_token():
     return token_data["access_token"]
 
 
+def is_valid_japanese_psa10(title: str) -> bool:
+    title_lower = title.lower()
+
+    has_psa = "psa" in title_lower
+
+    jp_keywords = ["japanese", "japan", " jp ",
+                   "jpn", "日本", "sv2a", "リザードン"]
+    has_japanese = any(kw in title_lower for kw in jp_keywords)
+
+    card_keywords = ["charizard", "リザードン", "lizardon"]
+    has_card = any(kw in title_lower for kw in card_keywords)
+
+    return has_psa and has_japanese and has_card
+
+
 def fetch_active_prices(card: dict) -> list[float]:
     """
-    Query eBay Browse API for active PSA 10 listings using multiple search queries.
-    Returns deduplicated list of asking prices sorted ascending.
+    Query eBay Browse API for active PSA 10 listings using 20 search queries.
+    Returns deduplicated, title-validated list of asking prices sorted ascending.
     """
     token = get_oauth_token()
     queries = build_search_queries(card)
-    logger.info("Searching '{}' with {} queries: {}", card["name"], len(queries), queries)
+    logger.info("Searching '{}' with {} queries", card["name"], len(queries))
 
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
     all_results = []
@@ -82,6 +98,7 @@ def fetch_active_prices(card: dict) -> list[float]:
                 if price > 0:
                     all_results.append({
                         "item_id": item.get("itemId", ""),
+                        "title": item.get("title", ""),
                         "price": price,
                     })
 
@@ -89,28 +106,41 @@ def fetch_active_prices(card: dict) -> list[float]:
             logger.error("Error on query '{}': {}", query, e)
 
     deduped = deduplicate_listings(all_results)
-    prices = sorted(r["price"] for r in deduped)
-    logger.info("'{}' — raw results: {}, after dedup: {}", card["name"], raw_total, len(deduped))
+
+    validated = [r for r in deduped if is_valid_japanese_psa10(r["title"])]
+    removed = len(deduped) - len(validated)
+    logger.info("Title validation: {} passed, {} removed", len(validated), removed)
+
+    prices = sorted(r["price"] for r in validated)
+    logger.info("'{}' pipeline: raw={}, dedup={}, validated={}, final={}",
+                card["name"], raw_total, len(deduped), len(validated), len(prices))
     return prices
 
 
 def compute_iqr_fmv(prices: list[float]) -> tuple[float | None, float, float]:
     """
-    Use IQR method to remove outliers, then return median of cleaned prices.
+    Use adaptive IQR method to remove outliers, then return median of cleaned prices.
     Returns (fmv, lower_fence, upper_fence).
     """
     if len(prices) < 3:
         return None, 0.0, 0.0
 
+    if len(prices) < 20:
+        multiplier = 1.0
+    elif len(prices) <= 50:
+        multiplier = 1.5
+    else:
+        multiplier = 2.0
+
     q1 = float(np.percentile(prices, 25))
     q3 = float(np.percentile(prices, 75))
     iqr = q3 - q1
-    lower_fence = q1 - (1.5 * iqr)
-    upper_fence = q3 + (1.5 * iqr)
+    lower_fence = q1 - (multiplier * iqr)
+    upper_fence = q3 + (multiplier * iqr)
     cleaned = [p for p in prices if lower_fence <= p <= upper_fence]
 
-    logger.info("IQR stats — Q1: ${:.2f}, Q3: ${:.2f}, IQR: ${:.2f}, fences: [${:.2f}, ${:.2f}], cleaned: {}/{}",
-                q1, q3, iqr, lower_fence, upper_fence, len(cleaned), len(prices))
+    logger.info("IQR (multiplier={}) — Q1: ${:.2f}, Q3: ${:.2f}, IQR: ${:.2f}, fences: [${:.2f}, ${:.2f}], cleaned: {}/{}",
+                multiplier, q1, q3, iqr, lower_fence, upper_fence, len(cleaned), len(prices))
 
     if len(cleaned) < 3:
         return None, lower_fence, upper_fence
@@ -144,7 +174,8 @@ def run_price_oracle():
             continue
 
         upsert_fmv(key, name, fmv, fmv, len(prices))
-        logger.info("FMV | {} | ${} (IQR median) | total listings: {}", name, fmv, len(prices))
+        logger.info("FMV | {} | ${} (IQR median) | raw: {} | validated: {} | after IQR: computed",
+                    name, fmv, len(prices), len(prices))
         time.sleep(5)
 
 

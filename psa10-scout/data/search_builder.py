@@ -1,71 +1,76 @@
-# API CALL BUDGET
-# 15 cards × 6 queries × 1 call each = 90 calls per run
-# 12 runs per day (every 2 hours) = 1,080 calls/day
+# API CALL BUDGET (1 card, 20 queries - testing mode)
+# 1 card × 20 queries × 1 API call each = 20 calls per run
+# Price oracle: 20 calls
+# Listing scout: 20 calls
+# Total per run: 40 calls
+# 12 runs per day (every 2 hours) = 480 calls/day
 # eBay Browse API limit = 5,000 calls/day
-# Usage = 21.6% of daily limit — safe margin
+# Usage = 9.6% of daily limit — very safe for testing
 
-from itertools import product
+from loguru import logger
 
-FIXED_TERMS = ["pokemon", "PSA 10"]
 
 def build_search_queries(card: dict) -> list[str]:
     """
-    Generates all meaningful search query combinations
-    for a card based on its variant fields.
-
-    Fixed terms always included: "pokemon PSA 10"
-
-    Variable terms: combines name_variants with
-    set_variants OR number_variants OR keyword_variants
-    to generate targeted queries.
-
-    Returns a deduplicated list of query strings,
-    max 6 queries per card to stay within API limits.
+    Generates 20 targeted search queries for maximum coverage.
+    Fixed prefix: "PSA 10"
+    Returns deduplicated list of query strings.
     """
-    queries = []
     name_variants = card.get("name_variants", [card["name"]])
     set_variants = card.get("set_variants", [])
     number_variants = card.get("number_variants", [])
     keyword_variants = card.get("keyword_variants", [])
-    languages = card.get("language", ["english"])
+    language_variants = card.get("language_variants", [])
 
-    fixed = "pokemon PSA 10"
+    n = lambda i: name_variants[i] if i < len(name_variants) else ""
+    s = lambda i: set_variants[i] if i < len(set_variants) else ""
+    num = lambda i: number_variants[i] if i < len(number_variants) else ""
+    k = lambda i: keyword_variants[i] if i < len(keyword_variants) else ""
+    lang = lambda i: language_variants[i] if i < len(language_variants) else ""
 
-    # Query type 1: name + number (most specific)
-    for name, number in product(name_variants[:1], number_variants[:1]):
-        queries.append(f"{fixed} {name} {number}".strip())
+    fixed = "PSA 10"
 
-    # Query type 2: name + keyword
-    for name, keyword in product(name_variants[:1], keyword_variants[:1]):
-        queries.append(f"{fixed} {name} {keyword}".strip())
+    raw_queries = [
+        # Group A — name + language + number (most specific)
+        f"{fixed} {n(0)} {lang(0)} {num(0)}",
+        f"{fixed} {n(0)} {lang(0)} {num(1)}",
+        f"{fixed} {n(1)} {lang(0)} {num(0)}",
+        f"{fixed} {n(0)} {lang(2)} {num(0)}",
+        f"{fixed} {n(0)} {lang(3)} {num(1)}",
 
-    # Query type 3: name + set
-    for name, set_v in product(name_variants[:1], set_variants[:1]):
-        queries.append(f"{fixed} {name} {set_v}".strip())
+        # Group B — name + language + keyword
+        f"{fixed} {n(0)} {lang(0)} {k(1)}",
+        f"{fixed} {n(0)} {lang(0)} {k(0)}",
+        f"{fixed} {n(0)} {lang(0)} {k(2)}",
+        f"{fixed} {n(1)} {lang(1)} {k(1)}",
+        f"{fixed} {n(0)} {lang(2)} {k(4)}",
 
-    # Query type 4: japanese variant if applicable
-    if "japanese" in languages:
-        for name in name_variants[:1]:
-            queries.append(f"{fixed} {name} japanese".strip())
+        # Group C — name + language + set
+        f"{fixed} {n(0)} {lang(0)} {s(0)}",
+        f"{fixed} {n(0)} {lang(0)} {s(1)}",
+        f"{fixed} {n(0)} {lang(1)} {s(2)}",
+        f"{fixed} {n(1)} {lang(0)} {s(1)}",
+        f"{fixed} {n(0)} {lang(2)} {s(0)}",
 
-    # Query type 5: name + second number variant (shorter form)
-    if len(number_variants) > 1:
-        for name in name_variants[:1]:
-            queries.append(f"{fixed} {name} {number_variants[1]}".strip())
-
-    # Query type 6: second name variant + first keyword
-    if len(name_variants) > 1 and keyword_variants:
-        queries.append(f"{fixed} {name_variants[1]} {keyword_variants[0]}".strip())
+        # Group D — broader fallback searches
+        f"{fixed} {n(0)} {lang(0)}",
+        f"{fixed} {n(3)} {lang(0)} {num(1)}",
+        f"{fixed} {n(3)} {s(1)} {k(1)}",
+        f"{fixed} {n(0)} {s(1)} {k(1)} PSA",
+        f"{fixed} {n(2)} {num(1)} {lang(0)} graded",
+    ]
 
     # Deduplicate while preserving order
     seen = set()
     unique = []
-    for q in queries:
-        if q not in seen:
+    for q in raw_queries:
+        q = " ".join(q.split())  # normalize whitespace
+        if q and q not in seen:
             seen.add(q)
             unique.append(q)
 
-    return unique[:6]  # max 6 queries per card
+    logger.info("Built {} unique queries for '{}'", len(unique), card.get("name", "unknown"))
+    return unique
 
 
 def deduplicate_listings(listings: list) -> list:

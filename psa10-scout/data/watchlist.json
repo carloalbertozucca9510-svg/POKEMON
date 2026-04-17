@@ -1,152 +1,43 @@
 [
   {
-    "name": "Charizard ex SAR 151",
+    "name": "Charizard ex SAR 151 Japanese",
     "set": "Pokemon 151",
-    "number": "199/165",
-    "language": ["english", "japanese"],
-    "name_variants": ["Charizard ex", "Charizard EX"],
-    "set_variants": ["Pokemon 151", "SV2a", "151"],
-    "number_variants": ["199/165", "199"],
-    "keyword_variants": ["Special Art Rare", "SAR", "Special Illustration Rare"]
-  },
-  {
-    "name": "Charizard ex SAR Obsidian",
-    "set": "Obsidian Flames",
-    "number": "228/197",
-    "language": ["english", "japanese"],
-    "name_variants": ["Charizard ex", "Charizard EX"],
-    "set_variants": ["Obsidian Flames", "SV3", "Volcanic"],
-    "number_variants": ["228/197", "228"],
-    "keyword_variants": ["Special Art Rare", "SAR", "Special Illustration"]
-  },
-  {
-    "name": "Umbreon VMAX Alt Art",
-    "set": "Paldea Evolved",
-    "number": "215/193",
-    "language": ["english", "japanese"],
-    "name_variants": ["Umbreon VMAX", "Umbreon V MAX"],
-    "set_variants": ["Paldea Evolved", "SV2", "Clay Burst"],
-    "number_variants": ["215/193", "215"],
-    "keyword_variants": ["Alt Art", "Alternate Art", "Special Art"]
-  },
-  {
-    "name": "Iono SAR",
-    "set": "Paldea Evolved",
-    "number": "269/193",
-    "language": ["english", "japanese"],
-    "name_variants": ["Iono"],
-    "set_variants": ["Paldea Evolved", "SV2", "Clay Burst"],
-    "number_variants": ["269/193", "269"],
-    "keyword_variants": ["Special Art Rare", "SAR", "Special Illustration"]
-  },
-  {
-    "name": "Charizard Holo Base Set",
-    "set": "Base Set",
-    "number": "4/102",
-    "language": ["english"],
-    "name_variants": ["Charizard"],
-    "set_variants": ["Base Set", "1999", "WOTC", "Shadowless"],
-    "number_variants": ["4/102", "4"],
-    "keyword_variants": ["Holo", "Holographic", "Rare Holo"]
-  },
-  {
-    "name": "Blastoise Holo Base Set",
-    "set": "Base Set",
-    "number": "2/102",
-    "language": ["english"],
-    "name_variants": ["Blastoise"],
-    "set_variants": ["Base Set", "1999", "WOTC", "Shadowless"],
-    "number_variants": ["2/102", "2"],
-    "keyword_variants": ["Holo", "Holographic", "Rare Holo"]
-  },
-  {
-    "name": "Venusaur Holo Base Set",
-    "set": "Base Set",
-    "number": "15/102",
-    "language": ["english"],
-    "name_variants": ["Venusaur"],
-    "set_variants": ["Base Set", "1999", "WOTC"],
-    "number_variants": ["15/102", "15"],
-    "keyword_variants": ["Holo", "Holographic", "Rare Holo"]
-  },
-  {
-    "name": "Mewtwo Holo Base Set",
-    "set": "Base Set",
-    "number": "10/102",
-    "language": ["english"],
-    "name_variants": ["Mewtwo"],
-    "set_variants": ["Base Set", "1999", "WOTC"],
-    "number_variants": ["10/102", "10"],
-    "keyword_variants": ["Holo", "Holographic", "Rare Holo"]
-  },
-  {
-    "name": "Lugia Holo Neo Genesis",
-    "set": "Neo Genesis",
-    "number": "9/111",
-    "language": ["english"],
-    "name_variants": ["Lugia"],
-    "set_variants": ["Neo Genesis", "Neo", "2000"],
-    "number_variants": ["9/111", "9"],
-    "keyword_variants": ["Holo", "Holographic"]
-  },
-  {
-    "name": "Ho-Oh Holo Neo Revelation",
-    "set": "Neo Revelation",
-    "number": "10/64",
-    "language": ["english"],
-    "name_variants": ["Ho-Oh", "Ho Oh"],
-    "set_variants": ["Neo Revelation", "Neo", "2001"],
-    "number_variants": ["10/64", "10"],
-    "keyword_variants": ["Holo", "Holographic"]
-  },
-  {
-    "name": "Gengar Holo Fossil",
-    "set": "Fossil",
-    "number": "5/62",
-    "language": ["english"],
-    "name_variants": ["Gengar"],
-    "set_variants": ["Fossil", "1999", "WOTC"],
-    "number_variants": ["5/62", "5"],
-    "keyword_variants": ["Holo", "Holographic"]
-  },
-  {
-    "name": "Pikachu Illustrator",
-    "set": "Promo",
-    "number": "—",
+    "number": "201/165",
     "language": ["japanese"],
-    "name_variants": ["Pikachu Illustrator", "Pikachu"],
-    "set_variants": ["Illustrator", "Promo", "CoroCoro"],
-    "number_variants": [],
-    "keyword_variants": ["Illustrator", "Trophy", "Promo"]
-  },
-  {
-    "name": "Rayquaza VMAX Alt Art",
-    "set": "Evolving Skies",
-    "number": "218/202",
-    "language": ["english", "japanese"],
-    "name_variants": ["Rayquaza VMAX", "Rayquaza V MAX"],
-    "set_variants": ["Evolving Skies", "Eevee Heroes"],
-    "number_variants": ["218/202", "218"],
-    "keyword_variants": ["Alt Art", "Alternate Art", "Special Art"]
-  },
-  {
-    "name": "Umbreon V Alt Art",
-    "set": "Evolving Skies",
-    "number": "188/203",
-    "language": ["english", "japanese"],
-    "name_variants": ["Umbreon V"],
-    "set_variants": ["Evolving Skies", "Eevee Heroes"],
-    "number_variants": ["188/203", "188"],
-    "keyword_variants": ["Alt Art", "Alternate Art", "Special Art"]
-  },
-  {
-    "name": "Pikachu VMAX Rainbow",
-    "set": "Vivid Voltage",
-    "number": "188/185",
-    "language": ["english", "japanese"],
-    "name_variants": ["Pikachu VMAX", "Pikachu V MAX"],
-    "set_variants": ["Vivid Voltage", "Amazing Volt Tackle"],
-    "number_variants": ["188/185", "188"],
-    "keyword_variants": ["Rainbow Rare", "Rainbow", "Hyper Rare"]
+    "name_variants": [
+      "Charizard ex",
+      "Charizard EX",
+      "Charizard",
+      "リザードン",
+      "Lizardon"
+    ],
+    "set_variants": [
+      "Pokemon 151",
+      "SV2a",
+      "151",
+      "Scarlet Violet 151",
+      "SV 151"
+    ],
+    "number_variants": [
+      "201/165",
+      "201",
+      "199/165",
+      "199"
+    ],
+    "keyword_variants": [
+      "Special Art Rare",
+      "SAR",
+      "Special Illustration Rare",
+      "SIR",
+      "Special Illustration",
+      "Full Art"
+    ],
+    "language_variants": [
+      "japanese",
+      "japan",
+      "JP",
+      "JPN",
+      "日本語"
+    ]
   }
 ]
